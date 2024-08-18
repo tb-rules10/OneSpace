@@ -8,7 +8,8 @@ RUN apt-get install -y nodejs
 
 WORKDIR /home/app
 
-COPY main.sh script.js buildCommand.js s3Client.js package*.json ./
+COPY main.sh script.js package*.json ./
+COPY utils/ utils/
 
 # Install Node.js dependencies
 RUN npm install

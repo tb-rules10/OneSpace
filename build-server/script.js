@@ -1,43 +1,37 @@
 const { exec } = require("child_process");
-const s3Client = require("./s3Client");
+const s3Client = require("./utils/s3Client");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const fs = require("fs");
 const path = require("path");
-const Redis = require("ioredis");
 const mime = require("mime-types");
-const getBuildCommand = require("./buildCommand");
-// const publisher = new Redis('')
-
+const getBuildCommand = require("./utils/buildCommand");
+const { publishLog, publisher } = require("./utils/redis");
 
 const PROJECT_ID = process.env.PROJECT_ID;
-const FRAMEWORK = process.env.FRAMEWORK;
-
-
-// function publishLog(log) {
-//   publisher.publish(`logs:${PROJECT_ID}`, JSON.stringify({ log }))
-// }
 
 async function init() {
   console.log("Executing - script.js");
-  const outDirPath = path.join(__dirname, "output");
-  console.log(outDirPath);
+  publishLog("--> Build Started");
 
-  const buildCommand = getBuildCommand(FRAMEWORK, outDirPath);
-  console.log(`---> ${buildCommand} <---`)
+  const outDirPath = path.join(__dirname, "output");
+  const buildCommand = getBuildCommand(outDirPath);
+
+  // console.log(`---> ${buildCommand} <---`)
   const p = exec(buildCommand);
 
-  // const p = exec(`cd ${outDirPath} && npm install && npm run build`)
-
   p.stdout.on("data", function (data) {
-    console.log(">", data.toString());
+    console.log("-->", data.toString());
+    publishLog(data.toString());
   });
 
   p.stdout.on("error", function (data) {
     console.log("Error : ", data.toString());
+    publishLog(`Error : ${data.toString()}`);
   });
 
   p.on("close", async function () {
     console.log("---> Build Complete <---");
+    publishLog("---> Build Complete <---");
 
     const distFolderPath = path.join(outDirPath, "dist");
     const distFolderContents = fs.readdirSync(distFolderPath, {
@@ -49,6 +43,7 @@ async function init() {
       if (fs.lstatSync(filePath).isDirectory()) continue;
 
       console.log("uploading", filePath);
+      publishLog(`uploading ${file}`);
 
       const command = new PutObjectCommand({
         Bucket: "tb-vercel-clone",
@@ -59,8 +54,12 @@ async function init() {
 
       await s3Client.send(command);
       console.log("--> Uploaded : ", filePath);
+      publishLog(`--> Uploaded : ${file}`);
     }
     console.log("--> Process Successful <--");
+    publishLog("--> Process Successful <--");
+    publishLog("--> Disconnecting from Redis <--");
+    publisher.disconnect();
   });
 }
 

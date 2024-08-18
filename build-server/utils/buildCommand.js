@@ -1,5 +1,6 @@
-const getBuildCommand = (framework, outDirPath) => {
+const getBuildCommand = (outDirPath) => {
 
+    const framework = process.env.FRAMEWORK;
     const installCommand = process.env.INSTALL_COMMAND ;
     const buildCommand = process.env.BUILD_COMMAND;
 

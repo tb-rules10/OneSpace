@@ -8,7 +8,20 @@ const PORT = 9000;
 const app = express();
 
 app.use(express.json());
-require('dotenv').config();
+require("dotenv").config();
+
+const subscriber = new Redis(process.env.REDIS_URL);
+
+const io = new Server({ cors: "*" });
+
+io.on("connection", (socket) => {
+  socket.on("subscribe", (channel) => {
+    socket.join(channel);
+    socket.emit("message", `Joined ${channel}`);
+  });
+});
+
+io.listen(9002, () => console.log("Socket Server 9002"));
 
 const ecsClient = new ECSClient({
   region: "us-east-1",
@@ -64,8 +77,8 @@ app.post("/project", async (req, res) => {
       ],
     },
   });
+  //   console.log(environmentVariables)
 
-//   console.log(environmentVariables)
   try {
     await ecsClient.send(command);
     return res.json({
@@ -79,5 +92,15 @@ app.post("/project", async (req, res) => {
       .json({ status: "error", message: "Failed to queue the project" });
   }
 });
+
+async function initRedisSubscribe() {
+  console.log("--Subscribed to logs");
+  subscriber.psubscribe("logs:*");
+  subscriber.on("pmessage", (pattern, channel, message) => {
+    io.to(channel).emit("message", message);
+  });
+}
+
+initRedisSubscribe();
 
 app.listen(PORT, () => console.log(`Reverse Proxy Running - ${PORT}`));
