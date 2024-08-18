@@ -1,4 +1,4 @@
-build-server
+build-server/s3Client.js
 
 # Logs
 logs
