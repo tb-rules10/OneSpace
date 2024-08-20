@@ -36,7 +36,7 @@ const config = {
   TASK: process.env.ECS_TASK_DEFINITION_ARN,
 };
 
-app.post("/project", async (req, res) => {
+app.post("/deploy", async (req, res) => {
   const { gitURL, slug, framework, installCommand, buildCommand } = req.body;
   const projectSlug = slug ? slug : generateSlug();
 
