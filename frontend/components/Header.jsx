@@ -11,6 +11,11 @@ export const Header = () => {
     console.log("clicked");
   };
 
+  const isActive = (href) => {
+    // Check if the current pathname starts with the href
+    return pathname.startsWith(href);
+  };
+
   return (
     <header className="top-0 z-30 w-full px-4 sm:fixed backdrop-blur bh-zinc-900/50">
       <div className="container mx-auto">
@@ -36,7 +41,11 @@ export const Header = () => {
                 <li>
                   <Link
                     href="/playgrounds"
-                    className="cursor-pointer flex items-center px-3 py-2 duration-150 text-sm sm:text-base hover:text-zinc-50 text-zinc-400"
+                    className={`cursor-pointer flex items-center px-3 py-2 duration-150 text-sm sm:text-base ${
+                      isActive("/playgrounds")
+                        ? "text-white"
+                        : "text-zinc-400 hover:text-zinc-50"
+                    }`}
                   >
                     Playgrounds
                   </Link>
@@ -45,7 +54,11 @@ export const Header = () => {
                 <li>
                   <Link
                     href="/projects"
-                    className="cursor-pointer flex items-center px-3 py-2 duration-150 text-sm sm:text-base hover:text-zinc-50 text-zinc-400"
+                    className={`cursor-pointer flex items-center px-3 py-2 duration-150 text-sm sm:text-base ${
+                      isActive("/projects")
+                        ? "text-white"
+                        : "text-zinc-400 hover:text-zinc-50"
+                    }`}
                   >
                     Projects
                   </Link>
