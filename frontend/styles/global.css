@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+.main{
+  @apply relative min-h-screen bg-black bg-gradient-to-tr from-zinc-900/50 to-zinc-700/30
+}
+
