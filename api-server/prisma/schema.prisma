@@ -22,10 +22,9 @@ enum DeployementStatus {
 }
 
 model User {
-  id        String     @id @default(uuid())
-  username  String     @unique
+  id        String     @id
+  username  String     
   email     String     @unique
-  password  String
   projects  Project[]  
 
   createdAt DateTime   @default(now())
@@ -34,30 +33,18 @@ model User {
 
 model Project {
   id           String  @id @default(uuid())
-  name         String
-  gitURL       String  @unique @map("git_url")
+  name         String  @unique
+  gitURL       String  @map("git_url")
   subDomain    String  @unique @map("subdomain")
-  customDomain String? @map("custom_domain")
+  status DeployementStatus @default(NOT_STARTED)
 
   user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
   userID String @map("user_id")
-  Deployement Deployement[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([customDomain])
-}
-
-model Deployement {
-  id     String            @id @default(uuid())
-  status DeployementStatus @default(NOT_STARTED)
-
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId String  @map("project_id")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
+// npx prisma migrate reset
 // npx prisma migrate dev --name init
+// npx prisma generate

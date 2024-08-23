@@ -1,3 +1,4 @@
+ca.pem
 frontend
 build-server/utils/s3Client.js
 build-server/utils/redis.js
