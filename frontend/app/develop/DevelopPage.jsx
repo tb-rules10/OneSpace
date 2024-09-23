@@ -6,7 +6,7 @@ import { Cog6ToothIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 import { generateSlug } from "random-word-slugs"; // Import the random-word-slugs
 
-const DeployPage = () => {
+const DevelopPage = () => {
   const { user } = useUser();
   const userId = user?.id;
   const router = useRouter();
@@ -169,4 +169,4 @@ const DeployPage = () => {
   );
 };
 
-export default DeployPage;
+export default DevelopPage;

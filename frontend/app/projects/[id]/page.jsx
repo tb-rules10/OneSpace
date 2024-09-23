@@ -103,10 +103,13 @@ const ProjectDetailPage = () => {
 
   const handleDelete = async () => {
     try {
+      setLoading(true);
       const response = await fetch(`http://localhost:9000/projects/${project.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Failed to delete project.");
+      setLoading(false);
       router.push("/projects");
     } catch (err) {
+      setLoading(false);
       alert(`Error: ${err.message}`);
     }
   };
