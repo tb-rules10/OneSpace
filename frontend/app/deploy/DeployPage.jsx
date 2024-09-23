@@ -40,38 +40,21 @@ const DeployPage = () => {
   };
   
   const onSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    await new Promise(resolve => setTimeout(resolve, 1000));  
+    e.preventDefault(); 
+  
+    setError("");  
+    setLoading(true);  
   
     if (validateForm()) {
-      setLoading(true);
-  
-      const userData = {
-        name: projectName,
-        gitURL: githubUrl,
-        userId: userId,
-      };
-  
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/project`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(userData),
-        });
+        await new Promise(resolve => setTimeout(resolve, 1000));  
   
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-        }
+        alert("Project created successfully!"); 
   
-        const result = await response.json();
-        console.log("Project created successfully:", result);
-
-        // Redirect to /projects after successful creation
-        router.push("/projects");
+        setProjectName("");
+        setGithubUrl("");
+  
+        router.push("/projects");  
   
       } catch (error) {
         console.error("Error creating project:", error);
@@ -81,6 +64,7 @@ const DeployPage = () => {
       }
     }
   };
+  
   
 
   

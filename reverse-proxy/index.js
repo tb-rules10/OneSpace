@@ -21,11 +21,9 @@ app.use((req, res) => {
     const hostname = req.hostname;
     const subdomain = hostname.split('.')[0];
     
-    // console.log(hostname);
+    const resolvesTo = `${BASE_PATH}${subdomain}`
     
-    const resolvesTo = `${BASE_PATH}/${subdomain}`
-    
-    // console.log(resolvesTo);
+    console.log(resolvesTo+"/index.html")
 
     return proxy.web(req, res, { target: resolvesTo })
 })

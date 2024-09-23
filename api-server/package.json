@@ -10,6 +10,7 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-ecs": "^3.632.0",
+    "@aws-sdk/client-s3": "^3.654.0",
     "@clerk/clerk-sdk-node": "^5.0.28",
     "@prisma/client": "^5.18.0",
     "cors": "^2.8.5",

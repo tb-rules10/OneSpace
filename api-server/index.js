@@ -1,23 +1,54 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const s3Client = require("./utils/s3Client");
+const { ecsClient, config } = require("./utils/ECSClient");
 const { generateSlug } = require("random-word-slugs");
-const { ECSClient, RunTaskCommand } = require("@aws-sdk/client-ecs");
+const { RunTaskCommand } = require("@aws-sdk/client-ecs");
+const { ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
 const { Server } = require("socket.io");
 const Redis = require("ioredis");
 const { PrismaClient } = require("@prisma/client");
 const { requireAuth } = require("@clerk/clerk-sdk-node");
-const { z } = require('zod')
+const { z } = require('zod');
 
 const PORT = 9000;
 const app = express();
+const prisma = new PrismaClient();
+const subscriber = new Redis(process.env.REDIS_URL);
+const io = new Server({ cors: "*" });
 
 app.use(express.json());
-app.use(cors()); 
-require("dotenv").config();
+app.use(cors());
 
-/////////////////////////////////////////////////////////////////////////////
 
-const prisma = new PrismaClient();
+const deleteS3Folder = async (Bucket, folderPath) => {
+  try {
+    const listParams = {
+      Bucket,
+      Prefix: folderPath.endsWith('/') ? folderPath : folderPath + '/',  // Ensure prefix ends with '/'
+    };
+    const listResponse = await s3Client.send(new ListObjectsV2Command(listParams));
+
+    if (listResponse.Contents.length === 0) {
+      console.log("No files found in folder.");
+      return;
+    }
+
+    const deleteParams = {
+      Bucket,
+      Delete: {
+        Objects: listResponse.Contents.map(item => ({ Key: item.Key })),
+      },
+    };
+
+    const deleteResponse = await s3Client.send(new DeleteObjectsCommand(deleteParams));
+    console.log("Deleted objects:", deleteResponse);
+  } catch (error) {
+    console.error("Error deleting folder:", error);
+  }
+};
+
 
 app.post("/user", async (req, res) => {
   const { id, email, username } = req.body;
@@ -26,21 +57,15 @@ app.post("/user", async (req, res) => {
     const existingUser = await prisma.user.findUnique({ where: { id } });
 
     if (!existingUser) {
-      const newUser = await prisma.user.create({
-        data: {
-          id,
-          email,
-          username,
-        },
-      });
-      console.log("---> New User Created :", email);
+      const newUser = await prisma.user.create({ data: { id, email, username } });
+      console.log("---> New User Created:", email);
       return res.status(200).json(newUser);
     } else {
-      console.log("---> User Login :", email);
+      console.log("---> User Login:", email);
       return res.status(200).json(existingUser);
     }
   } catch (error) {
-    console.error("---> Login Failed :", email);
+    console.error("---> Login Failed:", email);
     console.error("Error processing user info:", error);
 
     if (error.code === 'P2002') {
@@ -52,19 +77,12 @@ app.post("/user", async (req, res) => {
 });
 
 
-
 app.get('/projects', async (req, res) => {
   const { userId } = req.query;
-
-  if (!userId) {
-    return res.status(400).json({ error: 'User ID is required' });
-  }
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
 
   try {
-    const projects = await prisma.project.findMany({
-      where: { userID: userId },
-    });
-
+    const projects = await prisma.project.findMany({ where: { userID: userId } });
     return res.status(200).json(projects);
   } catch (error) {
     console.error('Error fetching projects:', error);
@@ -75,14 +93,12 @@ app.get('/projects', async (req, res) => {
 
 app.get('/projects/:id', async (req, res) => {
   const { id } = req.params;
-  console.log("---> Fetching project : ", id);
+  console.log("---> Fetching project:", id);
 
   try {
     const project = await prisma.project.findUnique({
       where: { id },
-      include: {
-        user: true,  
-      },
+      include: { user: true },
     });
 
     if (!project) {
@@ -97,10 +113,7 @@ app.get('/projects/:id', async (req, res) => {
 });
 
 
-
 app.post('/project', async (req, res) => {
-
-  console.log("new req project");
   const { userId } = req.body;
 
   const schema = z.object({
@@ -109,100 +122,58 @@ app.post('/project', async (req, res) => {
   });
 
   const safeParseResult = schema.safeParse(req.body);
-
-  if (!safeParseResult.success) {
-    return res.status(400).json({ error: safeParseResult.error.errors });
-  }
+  if (!safeParseResult.success) return res.status(400).json({ error: safeParseResult.error.errors });
 
   const { name, gitURL } = safeParseResult.data;
-  data = {
-    name,
-    gitURL,
-    subDomain: generateSlug(),
-    userID: userId
-  }
-  console.log("----");
-  console.log(data);
 
   try {
     await prisma.project.create({
-      data: {
-        name,
-        gitURL,
-        subDomain: generateSlug(),
-        userID: userId
-      }
-    }); 
-
+      data: { name, gitURL, subDomain: generateSlug(), userID: userId }
+    });
     return res.status(201).json({ status: 'success' });
   } catch (error) {
-    if (error.meta.target.includes('name')) {
+    if (error.meta?.target?.includes('name')) {
       return res.status(409).json({ error: 'Choose a different project name.' });
     }
-    
     console.error('Error creating project:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// app.post("/signin", (req, res) => {
-//   console.log("Sign-in request received:", req.body);
-//   return res.json({ status: "success", message: "Sign-in request received" });
-// });
 
-// app.post("/signup", (req, res) => {
-//   console.log("creating new acc:", req.body);
-//   return res.json({ status: "success", message: "creating new acc" });
-// });
+app.delete("/projects/:id", async (req, res) => {
+  const { id } = req.params;
+  console.log("---> Deleting project:", id);
 
+  try {
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
 
-//////////////////////////////////////////////////////////////////////////
+    deleteS3Folder("tb-vercel-clone", `__outputs/${project.subDomain}`);
 
-const ecsClient = new ECSClient({
-  region: "us-east-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+    await prisma.project.delete({ where: { id } });
+    console.log("---> Project Deleted:", id);
+    return res.status(200).json({ message: 'Project deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-const config = {
-  CLUSTER: process.env.ECS_CLUSTER_ARN,
-  TASK: process.env.ECS_TASK_DEFINITION_ARN,
-};
+// app.post("/develop", async (req, res) => {
 
-
-const subscriber = new Redis(process.env.REDIS_URL);
-
-const io = new Server({ cors: "*" });
-
-io.on("connection", (socket) => {
-  socket.on("subscribe", (channel) => {
-    socket.join(channel);
-    socket.emit("message", `Joined ${channel}`);
-  });
-});
-
-io.listen(9002, () => console.log("Socket Server 9002"));
+// }
 
 app.post("/deploy", async (req, res) => {
   const { projectId } = req.body;
 
   try {
-    if (!projectId) {
-      return res.status(400).json({ error: 'Project ID is required' });
-    }
+    if (!projectId) return res.status(400).json({ error: 'Project ID is required' });
 
     const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
+    if (!project) return res.status(404).json({ error: 'Project not found' });
 
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { status: 'READY' },
-    });
-    console.log(project);
+    await prisma.project.update({ where: { id: projectId }, data: { status: 'READY' } });
 
     const command = new RunTaskCommand({
       cluster: config.CLUSTER,
@@ -212,14 +183,7 @@ app.post("/deploy", async (req, res) => {
       networkConfiguration: {
         awsvpcConfiguration: {
           assignPublicIp: "ENABLED",
-          subnets: [
-            "subnet-0f3075b6903410ab3",
-            "subnet-09eab8f3171203894",
-            "subnet-05bd72b5d63350c31",
-            "subnet-0a024ca22e3368327",
-            "subnet-0755a23fb9cd7a31c",
-            "subnet-0203bc345405fcb84",
-          ],
+          subnets: ["subnet-0f3075b6903410ab3", "subnet-09eab8f3171203894"],
           securityGroups: ["sg-0afae1a5fcc78f6fe"],
         },
       },
@@ -236,16 +200,8 @@ app.post("/deploy", async (req, res) => {
       },
     });
 
-    try {
-      await ecsClient.send(command);
-      return res.json({
-        status: "queued",
-        data: { url: `http://${project.subDomain}.localhost:8000` },
-      });
-    } catch (error) {
-      console.error("Error running ECS task:", error);
-      return res.status(500).json({ status: "error", message: "Failed to queue the project" });
-    }
+    await ecsClient.send(command);
+    return res.json({ status: "queued", data: { url: `http://${project.subDomain}.localhost:8000` } });
 
   } catch (error) {
     console.error("Error processing deployment:", error);
@@ -253,62 +209,6 @@ app.post("/deploy", async (req, res) => {
   }
 });
 
-// app.post("/deploy", async (req, res) => {
-//   const { gitURL, slug, framework, installCommand, buildCommand } = req.body;
-//   const projectSlug = slug ? slug : generateSlug();
-
-//   const environmentVariables = [
-//     { name: "GIT_REPOSITORY__URL", value: gitURL },
-//     { name: "PROJECT_ID", value: projectSlug },
-//     framework ? { name: "FRAMEWORK", value: framework } : null,
-//     installCommand ? { name: "INSTALL_COMMAND", value: installCommand } : null,
-//     buildCommand ? { name: "BUILD_COMMAND", value: buildCommand } : null,
-//   ].filter(Boolean);
-
-//   // Spin the container
-//   const command = new RunTaskCommand({
-//     cluster: config.CLUSTER,
-//     taskDefinition: config.TASK,
-//     launchType: "FARGATE",
-//     count: 1,
-//     networkConfiguration: {
-//       awsvpcConfiguration: {
-//         assignPublicIp: "ENABLED",
-//         subnets: [
-//           "subnet-0f3075b6903410ab3",
-//           "subnet-09eab8f3171203894",
-//           "subnet-05bd72b5d63350c31",
-//           "subnet-0a024ca22e3368327",
-//           "subnet-0755a23fb9cd7a31c",
-//           "subnet-0203bc345405fcb84",
-//         ],
-//         securityGroups: ["sg-0afae1a5fcc78f6fe"],
-//       },
-//     },
-//     overrides: {
-//       containerOverrides: [
-//         {
-//           name: "builder-image",
-//           environment: environmentVariables,
-//         },
-//       ],
-//     },
-//   });
-//   //   console.log(environmentVariables)
-
-//   try {
-//     await ecsClient.send(command);
-//     return res.json({
-//       status: "queued",
-//       data: { projectSlug, url: `http://${projectSlug}.localhost:8000` },
-//     });
-//   } catch (error) {
-//     console.error("Error running ECS task:", error);
-//     return res
-//       .status(500)
-//       .json({ status: "error", message: "Failed to queue the project" });
-//   }
-// });
 
 async function initRedisSubscribe() {
   console.log("---> Redis Logs Running");
@@ -319,5 +219,13 @@ async function initRedisSubscribe() {
 }
 
 initRedisSubscribe();
+
+io.on("connection", (socket) => {
+  socket.on("subscribe", (channel) => {
+    socket.join(channel);
+    socket.emit("message", `Joined ${channel}`);
+  });
+});
+io.listen(9002, () => console.log("Socket Server 9002"));
 
 app.listen(PORT, () => console.log(`API SERVER Running - ${PORT}`));
