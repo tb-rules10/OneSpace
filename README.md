@@ -33,11 +33,11 @@ cd OneSpace
 
 cd api-server
 npm i 
-node index.js
+npm start
 
-cd reverse-proxt
+cd reverse-proxy
 npm i
-node index.js
+npm start
 
 cd frontend
 npm i
