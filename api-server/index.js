@@ -183,8 +183,8 @@ app.post("/deploy", async (req, res) => {
       networkConfiguration: {
         awsvpcConfiguration: {
           assignPublicIp: "ENABLED",
-          subnets: ["subnet-0f3075b6903410ab3", "subnet-09eab8f3171203894"],
-          securityGroups: ["sg-0afae1a5fcc78f6fe"],
+          subnets: ["subnet-08bb459dcd26272bf", "subnet-0747f33d1851c9717", "subnet-0d247f9c1733b8002", "subnet-0180450fbdf5f8bfd", "subnet-02775f734f184a11a", "subnet-0a3724490b0cd222a"],
+          securityGroups: ["sg-0acde93107a6636a9"],
         },
       },
       overrides: {

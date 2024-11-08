@@ -4,7 +4,7 @@ const httpProxy = require('http-proxy')
 const app = express()
 const PORT = 8000
 
-const BASE_PATH = 'https://tb-vercel-clone.s3.amazonaws.com/__outputs/'
+const BASE_PATH = 'https://tb-one-space.s3.amazonaws.com/__outputs/'
 
 const proxy = httpProxy.createProxy({
     changeOrigin: true
