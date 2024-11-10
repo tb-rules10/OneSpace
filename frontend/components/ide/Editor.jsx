@@ -33,7 +33,7 @@ function Editor({ code, setCode, selectedFile }) {
       <AceEditor
         value={code}
         onChange={(e) => selectedFile && setCode(e)}
-        height="50vh"  // Keeps the height at 50vh (as per your requirement)
+        height="55vh"  // Keeps the height at 50vh (as per your requirement)
         width="100%"   // Full width to fill container
         mode={language}  // Dynamically change the mode based on selected language
         theme="monokai"

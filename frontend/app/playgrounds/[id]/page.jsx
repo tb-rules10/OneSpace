@@ -25,9 +25,11 @@ const ProjectEditorPage = ({ id }) => {
   const [error, setError] = useState(null);
   const isSaved = selectedFileContent === code;
 
+  // Fetch file tree from the server based on the project name
   const getFileTree = async () => {
+    console.log("Fetching file tree for project:", project.name);
     try {
-      const response = await fetch("http://localhost:5000/files");
+      const response = await fetch(`http://localhost:5000/files?projectName=${encodeURIComponent(project.name)}`);
       const res = await response.json();
       setFileTree(res.tree);
     } catch (error) {
@@ -36,6 +38,7 @@ const ProjectEditorPage = ({ id }) => {
   };
 
   useEffect(() => {
+    // Fetch project data when component loads
     const id = window.location.pathname.split("/").pop();
     if (!id) return;
 
@@ -66,12 +69,17 @@ const ProjectEditorPage = ({ id }) => {
   }, [id]);
 
   useEffect(() => {
+    // If selected file changes, fetch its content
     if (!selectedFile) return;
 
     const fetchFileContents = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/files/content?path=${encodeURIComponent(selectedFile)}`);
+        const projectName = encodeURIComponent(project.name); 
+        const filePath = encodeURIComponent(selectedFile); 
+    
+        const res = await fetch(`http://localhost:5000/files/content?projectName=${projectName}&path=${filePath}`);
         const content = await res.json();
+    
         setSelectedFileContent(content.content);
       } catch (error) {
         console.error("Error fetching file content:", error);
@@ -82,24 +90,29 @@ const ProjectEditorPage = ({ id }) => {
   }, [selectedFile]);
 
   useEffect(() => {
+    // Update the code when file content changes
     if (selectedFile && selectedFileContent) {
       setCode(selectedFileContent || "");
     }
   }, [selectedFile, selectedFileContent]);
 
   useEffect(() => {
+    // Fetch file tree when the project is ready
+    if (!project || !project.name) return;
+
     getFileTree();
     socket.on("file-refresh", getFileTree);
 
     return () => {
       socket.off("file-refresh");
     };
-  }, []);
+  }, [project]);
 
   useEffect(() => {
+    // Send code updates to the server after changes
     if (code !== undefined && selectedFile && !isSaved) {
       const timer = setTimeout(() => {
-        socket.emit("code-update", code, selectedFile);
+        socket.emit("code-update", code, `${project.name}${selectedFile}`);
       }, 1000);
       return () => clearTimeout(timer);
     }

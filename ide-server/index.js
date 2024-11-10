@@ -9,7 +9,7 @@ const { Server: SocketServer } = require('socket.io');
 
 // Configurations
 const bashPath = process.env.BASH_PATH || 'C:\\Program Files\\Git\\bin\\bash.exe';
-const userDir = path.resolve(__dirname, 'user'); // Base user directory
+const userDir = path.resolve(__dirname, 'playgrounds'); // Base user directory
 const port = process.env.PORT || 5000;
 
 // Initialize Express and HTTP Server
@@ -37,7 +37,7 @@ chokidar.watch(userDir, {
   ignored: /(^|[\/\\])node_modules/,
   persistent: true
 }).on('all', (event, filePath) => {
-  // console.log(`File change detected: ${event} - ${filePath}`);
+  // Detect file changes and emit refresh event
   io.emit('file-refresh');
 });
 
@@ -49,6 +49,11 @@ io.on('connection', (socket) => {
   socket.on('code-update', async (content, filePath) => {
     const fullPath = path.join(userDir, filePath);
     try {
+      // Ensure that the directory exists
+      const dirPath = path.dirname(fullPath);
+      await fs.mkdir(dirPath, { recursive: true });
+
+      // Write content to the file
       await fs.writeFile(fullPath, content);
       console.log(`File updated: ${filePath}`);
     } catch (error) {
@@ -75,20 +80,41 @@ app.get('/', (req, res) => {
 
 // Get file tree structure
 app.get('/files', async (req, res) => {
+  const projectName = req.query.projectName;
+
+  if (!projectName) 
+    return res.status(400).json({ error: 'Project name is required' });
+
+  const projectDir = path.resolve(userDir, projectName);
+
   try {
-    const fileTree = await generateFileTree(userDir);
+    const folderExists = await fs
+      .access(projectDir, fs.constants.F_OK)
+      .then(() => true)
+      .catch(() => false);
+
+    if (!folderExists) 
+      await fs.mkdir(projectDir, { recursive: true });
+
+    const fileTree = await generateFileTree(projectDir);
     res.json({ tree: fileTree });
   } catch (error) {
-    console.error("Error generating file tree:", error);
-    res.status(500).json({ error: "Failed to generate file tree" });
+    console.error('Error generating file tree:', error);
+    res.status(500).json({ error: 'Failed to generate file tree' });
   }
 });
 
 // Get file content
 app.get('/files/content', async (req, res) => {
+  const projectName = req.query.projectName; 
   const filePath = req.query.path;
+  const fullPath = path.join(projectName, filePath);
+
+  if (!filePath) 
+    return res.status(400).json({ error: 'File path is required' });
+
   try {
-    const content = await fs.readFile(path.join(userDir, filePath), 'utf-8');
+    const content = await fs.readFile(path.join(userDir, fullPath), 'utf-8');
     res.json({ content });
   } catch (error) {
     console.error("Error reading file:", error);

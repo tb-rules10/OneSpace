@@ -17,7 +17,7 @@ const FileTreeNode = ({ filename, nodes, onSelect, path, isSelected }) => {
   return (
     <div className="ml-4">
       <div
-        className={`cursor-pointer ${isDir ? "font-semibold" : "text-zinc-200"}
+        className={`cursor-pointer ${isDir ? "font-semibold" : "text-zinc-200"} 
           ${isSelected ? "bg-zinc-600 text-white" : "hover:bg-zinc-600 hover:text-white"}
           rounded p-2 flex items-center justify-between transition-all`}
         onClick={handleFileClick}
