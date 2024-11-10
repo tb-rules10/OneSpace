@@ -26,6 +26,7 @@ model User {
   username  String     
   email     String     @unique
   projects  Project[]  
+  playgrounds Playgrounds[]
 
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -43,6 +44,18 @@ model Project {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Playgrounds {
+  id           String  @id @default(uuid())
+  name         String  @unique
+  env          String  
+
+  user         User   @relation(fields: [userID], references: [id], onDelete: Cascade)
+  userID       String @map("user_id")
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // npx prisma migrate reset

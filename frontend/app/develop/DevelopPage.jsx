@@ -11,13 +11,18 @@ const DevelopPage = () => {
   const userId = user?.id;
   const router = useRouter();
 
+  // const environments = [
+  //   { value: "nodejs", label: "Node.js" },
+  //   { value: "python", label: "Python" },
+  //   { value: "java", label: "Java" },
+  //   { value: "ruby", label: "Ruby" },
+  //   { value: "go", label: "Go" },
+  //   { value: "php", label: "PHP" },
+  // ];
+
   const environments = [
-    { value: "nodejs", label: "Node.js" },
-    { value: "python", label: "Python" },
-    { value: "java", label: "Java" },
-    { value: "ruby", label: "Ruby" },
-    { value: "go", label: "Go" },
-    { value: "php", label: "PHP" },
+    { value: "bash", label: "Git Bash" },
+    { value: "powershell", label: "PowerShell" },
   ];
 
   const [playgroundName, setPlaygroundName] = useState("");
@@ -66,15 +71,28 @@ const DevelopPage = () => {
     if (validateForm()) {
       try {
         await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        alert("Playground created successfully!");
-
         
+        const userData = {
+          userId, 
+          env: environment,
+          name: playgroundName,
+        };
 
-        setPlaygroundName("");
-        setEnvironment("");
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pg`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(userData),
+        });
 
-        // router.push("/playgrounds");
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+        console.log("Project created successfully:", result);
+        router.push("/playgrounds");
       } catch (error) {
         console.error("Error creating playground:", error);
         setError(error.message || "An unexpected error occurred");

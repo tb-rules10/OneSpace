@@ -1,21 +1,25 @@
-const { PrismaClient } = require("@prisma/client");
 const { generateSlug } = require("random-word-slugs");
+const prisma = require("../prisma/prismaClient");
+const { s3Bucket, s3Client } = require("../utils/s3Client");
+const { ecsClient, config } = require("../utils/ECSClient");
 const { RunTaskCommand } = require("@aws-sdk/client-ecs");
-const s3Client = require("../utils/s3Client");
 const { ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
-const { z } = require('zod');
+const { z } = require("zod");
 
-const prisma = new PrismaClient();
-
+// Helper function to delete S3 folder
 const deleteS3Folder = async (Bucket, folderPath) => {
   try {
     const listParams = {
       Bucket,
       Prefix: folderPath.endsWith('/') ? folderPath : folderPath + '/',
     };
+
+    console.log("Listing objects with params:", listParams);
+
     const listResponse = await s3Client.send(new ListObjectsV2Command(listParams));
 
     if (listResponse.Contents.length === 0) {
+      console.log("No objects found in folder.");
       return;
     }
 
@@ -26,26 +30,36 @@ const deleteS3Folder = async (Bucket, folderPath) => {
       },
     };
 
+    console.log("Deleting objects with params:", deleteParams);
+
     await s3Client.send(new DeleteObjectsCommand(deleteParams));
+    console.log("Objects deleted successfully");
   } catch (error) {
     console.error("Error deleting folder:", error);
   }
 };
 
-exports.getProjects = async (req, res) => {
+
+// Controller functions
+
+// Get all projects for a user
+const getProjects = async (req, res) => {
   const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+  if (!userId) return res.status(400).json({ error: "User ID is required" });
 
   try {
     const projects = await prisma.project.findMany({ where: { userID: userId } });
     return res.status(200).json(projects);
   } catch (error) {
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Error fetching projects:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-exports.getProjectById = async (req, res) => {
+// Get project by ID
+const getProjectById = async (req, res) => {
   const { id } = req.params;
+  console.log("---> Fetching project:", id);
 
   try {
     const project = await prisma.project.findUnique({
@@ -54,21 +68,23 @@ exports.getProjectById = async (req, res) => {
     });
 
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+      return res.status(404).json({ error: "Project not found" });
     }
 
     return res.status(200).json(project);
   } catch (error) {
-    console.error('Error fetching project:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Error fetching project:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-exports.createProject = async (req, res) => {
+// Create a new project
+const createProject = async (req, res) => {
   const { userId } = req.body;
+
   const schema = z.object({
-    name: z.string().min(3, 'Project name should have at least 3 characters'),
-    gitURL: z.string().url('Invalid URL format')
+    name: z.string().min(3, "Project name should have at least 3 characters"),
+    gitURL: z.string().url("Invalid URL format"),
   });
 
   const safeParseResult = schema.safeParse(req.body);
@@ -78,42 +94,51 @@ exports.createProject = async (req, res) => {
 
   try {
     await prisma.project.create({
-      data: { name, gitURL, subDomain: generateSlug(), userID: userId }
+      data: { name, gitURL, subDomain: generateSlug(), userID: userId },
     });
-    return res.status(201).json({ status: 'success' });
+    return res.status(201).json({ status: "success" });
   } catch (error) {
-    if (error.meta?.target?.includes('name')) {
-      return res.status(409).json({ error: 'Choose a different project name.' });
+    if (error.meta?.target?.includes("name")) {
+      return res.status(409).json({ error: "Choose a different project name." });
     }
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Error creating project:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-exports.deleteProject = async (req, res) => {
+// Delete a project by ID
+const deleteProject = async (req, res) => {
   const { id } = req.params;
+  console.log("---> Deleting project:", id);
 
   try {
     const project = await prisma.project.findUnique({ where: { id } });
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!project) return res.status(404).json({ error: "Project not found" });
 
-    await deleteS3Folder("tb-vercel-clone", `__outputs/${project.subDomain}`);
+    // Delete associated S3 folder
+    await deleteS3Folder(s3Bucket , `__outputs/${project.subDomain}`);
+
+    // Delete project from database
     await prisma.project.delete({ where: { id } });
-    return res.status(200).json({ message: 'Project deleted successfully' });
+    console.log("---> Project Deleted:", id);
+    return res.status(200).json({ message: "Project deleted successfully" });
   } catch (error) {
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Error deleting project:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
-exports.deployProject = async (req, res) => {
+// Deploy a project
+const deployProject = async (req, res) => {
   const { projectId } = req.body;
 
   try {
-    if (!projectId) return res.status(400).json({ error: 'Project ID is required' });
+    if (!projectId) return res.status(400).json({ error: "Project ID is required" });
 
     const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!project) return res.status(404).json({ error: "Project not found" });
 
-    await prisma.project.update({ where: { id: projectId }, data: { status: 'READY' } });
+    await prisma.project.update({ where: { id: projectId }, data: { status: "READY" } });
 
     const command = new RunTaskCommand({
       cluster: config.CLUSTER,
@@ -123,8 +148,8 @@ exports.deployProject = async (req, res) => {
       networkConfiguration: {
         awsvpcConfiguration: {
           assignPublicIp: "ENABLED",
-          subnets: ["subnet-0f3075b6903410ab3", "subnet-09eab8f3171203894"],
-          securityGroups: ["sg-0afae1a5fcc78f6fe"],
+          subnets: ["subnet-08bb459dcd26272bf", "subnet-0747f33d1851c9717", "subnet-0d247f9c1733b8002", "subnet-0180450fbdf5f8bfd", "subnet-02775f734f184a11a", "subnet-0a3724490b0cd222a"],
+          securityGroups: ["sg-0acde93107a6636a9"],
         },
       },
       overrides: {
@@ -132,8 +157,8 @@ exports.deployProject = async (req, res) => {
           {
             name: "builder-image",
             environment: [
-              { name: 'GIT_REPOSITORY__URL', value: project.gitURL },
-              { name: 'PROJECT_ID', value: project.subDomain },
+              { name: "GIT_REPOSITORY__URL", value: project.gitURL },
+              { name: "PROJECT_ID", value: project.subDomain },
             ],
           },
         ],
@@ -142,8 +167,16 @@ exports.deployProject = async (req, res) => {
 
     await ecsClient.send(command);
     return res.json({ status: "queued", data: { url: `http://${project.subDomain}.localhost:8000` } });
-
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to process deployment' });
+    console.error("Error processing deployment:", error);
+    return res.status(500).json({ error: "Failed to process deployment" });
   }
+};
+
+module.exports = {
+  getProjects,
+  getProjectById,
+  createProject,
+  deleteProject,
+  deployProject,
 };

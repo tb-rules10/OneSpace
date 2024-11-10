@@ -49,7 +49,7 @@ const DeployPage = () => {
         userId: userId,
       };
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/project`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

@@ -61,7 +61,7 @@ const ProjectDetailPage = () => {
     setDeploying(true);
     setLogs([]);
     try {
-      const response = await fetch(`http://localhost:9000/deploy`, {
+      const response = await fetch(`http://localhost:9000/projects/deploy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: project.id }),
@@ -121,7 +121,6 @@ const ProjectDetailPage = () => {
   }, [logs]);
 
   const formatLogMessage = (log) => {
-    if (log.toString().includes("Disconnecting")) console.log("--------end");
     if (log.toString().includes(project.subDomain)) return log;
     const trimmedLog = log.slice(8, -2);
     return trimmedLog.split("\\n").join("<br />");
